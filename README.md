@@ -1,4 +1,4 @@
-# Weather AI – Smart Weather Monitoring System
+# SkySense AI – Intelligent Weather Monitoring and Personalized Recommendation System
 
 Full-stack main project built with React, Node.js, Express and MongoDB.
 
