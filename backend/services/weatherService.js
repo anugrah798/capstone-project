@@ -1,3 +1,10 @@
+import WeatherAlert from "../models/WeatherAlert.js";
+import User from "../models/User.js";
+
+// =====================================================
+// CONVERT OPENWEATHER CONDITION
+// =====================================================
+
 function codeToCondition(weather) {
   if (!weather) return "Unknown";
 
@@ -92,57 +99,30 @@ export async function weatherByCoordinates(
 
 
   // -----------------------------------------------
-  // OPENWEATHER - 3 HOUR FORECAST
+  // OPEN-METEO - DAILY + HOURLY WEATHER
+  // ONE REQUEST ONLY
   // -----------------------------------------------
 
-  const forecastUrl =
-    `https://api.openweathermap.org/data/2.5/forecast` +
-    `?lat=${latitude}` +
-    `&lon=${longitude}` +
-    `&appid=${process.env.OPENWEATHER_API_KEY}` +
-    `&units=metric`;
-
-
-  // -----------------------------------------------
-  // OPEN-METEO - 7 DAY FORECAST
-  // -----------------------------------------------
-
-  const dailyUrl =
+  const openMeteoUrl =
     `https://api.open-meteo.com/v1/forecast` +
     `?latitude=${latitude}` +
     `&longitude=${longitude}` +
     `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max` +
+    `&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m,visibility` +
     `&forecast_days=7` +
     `&timezone=auto`;
 
 
   // -----------------------------------------------
-  // OPEN-METEO - TODAY HOURLY WEATHER
-  // -----------------------------------------------
-
-  const hourlyUrl =
-    `https://api.open-meteo.com/v1/forecast` +
-    `?latitude=${latitude}` +
-    `&longitude=${longitude}` +
-    `&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m,visibility` +
-    `&forecast_days=1` +
-    `&timezone=auto`;
-
-
-  // -----------------------------------------------
-  // CALL ALL APIs
+  // CALL APIs
   // -----------------------------------------------
 
   const [
     currentResponse,
-    forecastResponse,
-    dailyResponse,
-    hourlyResponse
+    openMeteoResponse
   ] = await Promise.all([
     fetch(currentUrl),
-    fetch(forecastUrl),
-    fetch(dailyUrl),
-    fetch(hourlyUrl)
+    fetch(openMeteoUrl)
   ]);
 
 
@@ -160,32 +140,12 @@ export async function weatherByCoordinates(
   }
 
 
-  if (!forecastResponse.ok) {
+  if (!openMeteoResponse.ok) {
     const errorText =
-      await forecastResponse.text();
+      await openMeteoResponse.text();
 
     throw new Error(
-      `OpenWeather forecast error: ${errorText}`
-    );
-  }
-
-
-  if (!dailyResponse.ok) {
-    const errorText =
-      await dailyResponse.text();
-
-    throw new Error(
-      `Daily forecast error: ${errorText}`
-    );
-  }
-
-
-  if (!hourlyResponse.ok) {
-    const errorText =
-      await hourlyResponse.text();
-
-    throw new Error(
-      `Hourly forecast error: ${errorText}`
+      `Open-Meteo forecast error: ${errorText}`
     );
   }
 
@@ -197,14 +157,8 @@ export async function weatherByCoordinates(
   const currentData =
     await currentResponse.json();
 
-  const forecastData =
-    await forecastResponse.json();
-
-  const dailyData =
-    await dailyResponse.json();
-
-  const hourlyData =
-    await hourlyResponse.json();
+  const openMeteoData =
+    await openMeteoResponse.json();
 
 
   // -----------------------------------------------
@@ -266,30 +220,31 @@ export async function weatherByCoordinates(
 
   const hourly = {
     time:
-      hourlyData.hourly?.time || [],
+      openMeteoData.hourly?.time || [],
 
     temperature_2m:
-      hourlyData.hourly?.temperature_2m || [],
+      openMeteoData.hourly?.temperature_2m || [],
 
     precipitation_probability:
-      hourlyData.hourly
+      openMeteoData.hourly
         ?.precipitation_probability || [],
 
     weather_code:
-      hourlyData.hourly?.weather_code || [],
+      openMeteoData.hourly?.weather_code || [],
 
     wind_speed_10m:
-      hourlyData.hourly?.wind_speed_10m || [],
+      openMeteoData.hourly?.wind_speed_10m || [],
 
     relative_humidity_2m:
-      hourlyData.hourly
+      openMeteoData.hourly
         ?.relative_humidity_2m || [],
 
     // ---------------------------------------------
     // VISIBILITY
     // ---------------------------------------------
+
     visibility:
-      hourlyData.hourly?.visibility || []
+      openMeteoData.hourly?.visibility || []
   };
 
 
@@ -299,32 +254,32 @@ export async function weatherByCoordinates(
 
   const daily = {
     time:
-      dailyData.daily?.time || [],
+      openMeteoData.daily?.time || [],
 
     temperature_2m_max:
-      dailyData.daily
+      openMeteoData.daily
         ?.temperature_2m_max || [],
 
     temperature_2m_min:
-      dailyData.daily
+      openMeteoData.daily
         ?.temperature_2m_min || [],
 
     precipitation_probability_max:
-      dailyData.daily
+      openMeteoData.daily
         ?.precipitation_probability_max || [],
 
     weather_code:
-      dailyData.daily
+      openMeteoData.daily
         ?.weather_code || [],
 
     sunrise:
-      dailyData.daily?.sunrise || [],
+      openMeteoData.daily?.sunrise || [],
 
     sunset:
-      dailyData.daily?.sunset || [],
+      openMeteoData.daily?.sunset || [],
 
     uv_index_max:
-      dailyData.daily?.uv_index_max || []
+      openMeteoData.daily?.uv_index_max || []
   };
 
 
@@ -340,10 +295,7 @@ export async function weatherByCoordinates(
     daily,
 
     timezone:
-      dailyData.timezone ||
-      hourlyData.timezone ||
-      forecastData.city?.timezone ||
-      0
+      openMeteoData.timezone || 0
   };
 }
 
@@ -378,10 +330,6 @@ export async function nearbyCities(
 // WEATHER ALERTS
 // --------------------------------------------------
 
-import WeatherAlert from "../models/WeatherAlert.js";
-import User from "../models/User.js";
-
-
 export async function generateWeatherAlerts(
   userId,
   city,
@@ -411,6 +359,10 @@ export async function generateWeatherAlerts(
   const current = weather.current || {};
   const daily = weather.daily || {};
 
+
+  // =========================================
+  // WEATHER VALUES
+  // =========================================
 
   const temperature = Number(
     current.temperature_2m || 0
@@ -602,7 +554,6 @@ export async function generateWeatherAlerts(
         severity: alertData.severity,
 
       });
-
     }
   }
 
