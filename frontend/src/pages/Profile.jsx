@@ -351,6 +351,7 @@ export default function Profile() {
                   setName(e.target.value)
                 }
                 placeholder="Enter your name"
+                spellCheck="false"
                 required
               />
 
@@ -386,7 +387,8 @@ export default function Profile() {
               onChange={(e) =>
                 setPreferredCity(e.target.value)
               }
-              placeholder="Example: Kochi"
+              placeholder="Example: Chennai"
+              spellCheck="false"
             />
 
             <small>

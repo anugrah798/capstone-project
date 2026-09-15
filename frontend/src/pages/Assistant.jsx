@@ -1,5 +1,5 @@
 import "./Assistant.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../services/api";
 
 function getWeatherIcon(code) {
@@ -30,6 +30,10 @@ export default function Assistant() {
   const [loading, setLoading] = useState(true);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState("");
+
+  const [recording, setRecording] = useState(false);
+
+  const speechRecognitionRef = useRef(null);
 
   async function loadCurrentLocation() {
     if (!navigator.geolocation) {
@@ -101,6 +105,12 @@ export default function Assistant() {
   useEffect(() => {
     loadCurrentLocation();
     loadRecentCities();
+
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, []);
 
   const selectedRecent =
@@ -118,27 +128,144 @@ export default function Assistant() {
       ? currentLocation
       : selectedRecent?.location || { name: selectedLocation, country: "" };
 
+  // --------------------------------------------------
+  // VOICE INPUT
+  // --------------------------------------------------
+
+  function startRecording() {
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setError(
+        "Speech recognition is not supported by this browser."
+      );
+      return;
+    }
+
+    if (recording) return;
+
+    const recognition = new SpeechRecognition();
+
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-IN";
+
+    speechRecognitionRef.current = recognition;
+
+    recognition.onstart = () => {
+      setRecording(true);
+      setError("");
+    };
+
+    recognition.onresult = (event) => {
+      const text =
+        event.results?.[0]?.[0]?.transcript?.trim();
+
+      if (text) {
+        setQuestion(text);
+        setError("");
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error(
+        "Speech recognition error:",
+        event.error
+      );
+
+      if (event.error === "not-allowed") {
+        setError("Microphone permission is required.");
+      } else if (event.error === "no-speech") {
+        setError(
+          "No speech was detected. Please try again."
+        );
+      } else {
+        setError(
+          `Speech recognition error: ${event.error}`
+        );
+      }
+
+      setRecording(false);
+    };
+
+    recognition.onend = () => {
+      setRecording(false);
+
+      if (speechRecognitionRef.current === recognition) {
+        speechRecognitionRef.current = null;
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error(
+        "Speech recognition start error:",
+        err
+      );
+
+      setRecording(false);
+      speechRecognitionRef.current = null;
+      setError("Unable to start voice input.");
+    }
+  }
+
+  function stopRecording() {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch (err) {
+        console.error(
+          "Speech recognition stop error:",
+          err
+        );
+      }
+
+      speechRecognitionRef.current = null;
+    }
+
+    setRecording(false);
+  }
+
+  function speakAnswer(text) {
+    if (!("speechSynthesis" in window) || !text) return;
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+
+    window.speechSynthesis.speak(utterance);
+  }
+
   async function ask(e) {
     e.preventDefault();
 
     if (!question.trim() || !selectedWeather) return;
 
     const userQuestion = question.trim();
-    setAsking(true);
 
+    setError("");
+    setAsking(true);
     try {
       const response = await api.post("/ai/chat", {
         question: userQuestion,
         weather: selectedWeather,
       });
 
+      const answer =
+        response.data?.answer ||
+        "Sorry, I could not answer that.";
+
       setMessages((prev) => [
         ...prev,
         {
           q: userQuestion,
-          a:
-            response.data?.answer ||
-            "Sorry, I could not answer that.",
+          a: answer,
         },
       ]);
 
@@ -339,6 +466,14 @@ export default function Assistant() {
                 <div>
                   <strong>SkySense AI</strong>
                   <p>{message.a}</p>
+                  <button
+                    type="button"
+                    className="assistant-speak-button"
+                    onClick={() => speakAnswer(message.a)}
+                    aria-label="Read answer aloud"
+                  >
+                    🔊
+                  </button>
                 </div>
               </div>
             ))}
@@ -386,25 +521,66 @@ export default function Assistant() {
           className="assistant-input-row"
           onSubmit={ask}
         >
-          <input
-            value={question}
-            onChange={(e) =>
-              setQuestion(e.target.value)
-            }
-            placeholder="Will it rain today? What should I wear?"
-            disabled={loading || asking || !selectedWeather}
-          />
+          <div className="assistant-input-wrapper">
+            <input
+              value={question}
+              onChange={(e) =>
+                setQuestion(e.target.value)
+              }
+              placeholder={
+                recording
+                  ? "Listening..."
+                  : "Will it rain today? What should I wear?"
+              }
+              disabled={
+                loading ||
+                asking ||
+                recording ||
+                !selectedWeather
+              }
+              spellCheck="false"
+            />
+
+            <button
+              type="button"
+              className={
+                recording
+                  ? "assistant-voice-button recording"
+                  : "assistant-voice-button"
+              }
+              onClick={
+                recording
+                  ? stopRecording
+                  : startRecording
+              }
+              disabled={
+                loading ||
+                asking ||
+                !selectedWeather
+              }
+              aria-label={
+                recording
+                  ? "Stop recording"
+                  : "Start voice input"
+              }
+            >
+              {recording ? "🔴" : "🎙️"}
+            </button>
+          </div>
 
           <button
             type="submit"
             disabled={
               loading ||
               asking ||
+              recording ||
               !question.trim() ||
               !selectedWeather
             }
           >
-            {asking ? "Thinking..." : "Ask AI →"}
+            {asking
+              ? "Thinking..."
+              : "Ask AI →"}
           </button>
         </form>
       </section>

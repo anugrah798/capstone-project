@@ -1470,6 +1470,41 @@ td {
 
 }
 
+
+/* Forecast error message */
+
+.forecast-error {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    margin: 18px 0;
+    padding: 16px 18px;
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 14px;
+    background: rgba(127, 29, 29, 0.18);
+    box-sizing: border-box;
+}
+
+.forecast-error-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.forecast-error strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #fca5a5;
+    font-size: 15px;
+}
+
+.forecast-error p {
+    margin: 0;
+    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
 .selected-day-panel {
     display: flex;
     align-items: center;
@@ -4999,6 +5034,10 @@ body:not(.dark-mode) .chat-box {
     box-shadow: 0 12px 32px rgba(35, 98, 130, 0.07);
 }
 
+body:not(.dark-mode) .panel h2 {
+    color: #20465e;
+}
+
 body:not(.dark-mode) .feature h3 {
     color: #20465e;
 }
@@ -6470,5 +6509,21 @@ body:not(.dark-mode) .hourly-card.now .hour-rain {
 
 body:not(.dark-mode) .hourly-card.active .hour-details,
 body:not(.dark-mode) .hourly-card.now .hour-details {
+    color: #64748b;
+}
+
+
+/* Forecast error message - light mode */
+
+body:not(.dark-mode) .forecast-error {
+    background: #fff5f5;
+    border-color: #fecaca;
+}
+
+body:not(.dark-mode) .forecast-error strong {
+    color: #b91c1c;
+}
+
+body:not(.dark-mode) .forecast-error p {
     color: #64748b;
 }

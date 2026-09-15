@@ -245,11 +245,18 @@ export default function ForecastPage() {
             </div>
 
             {error && (
-                <p className="error">
-                    {error}
-                </p>
-            )}
+                <div className="forecast-error">
+                    <span className="forecast-error-icon">⚠️</span>
 
+                    <div>
+                        <strong>{error}</strong>
+
+                        <p>
+                            Please check the city name and try again.
+                        </p>
+                    </div>
+                </div>
+            )}
             {data && daily && (
                 <>
                     {/* LOCATION */}
