@@ -11,7 +11,14 @@ import aiRoutes from "./routes/aiRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 
 const app = express();
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://capstone-project-anugrah123.vercel.app",
+    ],
+  })
+);
 app.use(express.json());
 
 app.get("/", (req, res) => res.json({ message: "Weather AI API is running" }));
