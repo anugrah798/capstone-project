@@ -173,6 +173,8 @@ export default function Home() {
   const [data, setData] = useState(null);
 
   const shareCardRef = useRef(null);
+  const initialWeatherLoadedRef = useRef(false);
+  const nearbyLoadingRef = useRef(false);
   const [suggestion, setSuggestion] = useState(null);
 
   const [loading, setLoading] = useState(false);
@@ -307,6 +309,10 @@ export default function Home() {
   }
 
   useEffect(() => {
+    if (initialWeatherLoadedRef.current) return;
+
+    initialWeatherLoadedRef.current = true;
+
     const cityFromUrl =
       searchParams.get("city");
 
@@ -491,10 +497,37 @@ export default function Home() {
   // -----------------------------
 
   async function loadNearbyCities() {
+    if (nearbyLoadingRef.current) return;
+
     if (!navigator.geolocation) {
       setNearbyCities([]);
       return;
     }
+
+    const cachedNearby = sessionStorage.getItem(
+      "skySenseNearbyCities"
+    );
+
+    if (cachedNearby) {
+      try {
+        const parsed = JSON.parse(cachedNearby);
+        const cacheAge = Date.now() - parsed.timestamp;
+
+        if (
+          cacheAge < 30 * 60 * 1000 &&
+          Array.isArray(parsed.data)
+        ) {
+          setNearbyCities(parsed.data);
+          return;
+        }
+      } catch {
+        sessionStorage.removeItem(
+          "skySenseNearbyCities"
+        );
+      }
+    }
+
+    nearbyLoadingRef.current = true;
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -513,8 +546,9 @@ export default function Home() {
             nearbyResponse.data?.cities || [];
 
           const results = [];
+          const limitedCities = cities.slice(0, 4);
 
-          for (const city of cities) {
+          for (const city of limitedCities) {
             try {
               const response =
                 await api.get(
@@ -526,40 +560,45 @@ export default function Home() {
 
               results.push({
                 city: city.name,
-
                 country:
                   city.country || "India",
-
                 condition:
                   getCondition(
                     weather?.weather_code
                   ),
-
                 temperature:
                   weather?.temperature_2m != null
                     ? convertTemperature(
                       weather.temperature_2m
                     )
                     : "--",
-
                 icon:
                   getWeatherIcon(
                     weather?.weather_code
                   ),
               });
             } catch {
-              // Skip a city if its weather cannot be loaded
+              // Skip city if weather is unavailable
             }
           }
 
           setNearbyCities(results);
+
+          sessionStorage.setItem(
+            "skySenseNearbyCities",
+            JSON.stringify({
+              timestamp: Date.now(),
+              data: results,
+            })
+          );
         } catch (error) {
           console.error(
             "Nearby cities error:",
             error
           );
-
           setNearbyCities([]);
+        } finally {
+          nearbyLoadingRef.current = false;
         }
       },
       (error) => {
@@ -567,17 +606,16 @@ export default function Home() {
           "Location permission error:",
           error
         );
-
         setNearbyCities([]);
+        nearbyLoadingRef.current = false;
       },
       {
-        enableHighAccuracy: true,
+        enableHighAccuracy: false,
         timeout: 10000,
-        maximumAge: 300000,
+        maximumAge: 30 * 60 * 1000,
       }
     );
   }
-
   useEffect(() => {
     loadNearbyCities();
   }, []);

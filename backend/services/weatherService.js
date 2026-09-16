@@ -29,9 +29,9 @@ function codeToCondition(weather) {
 }
 
 
-// --------------------------------------------------
+// =====================================================
 // CITY SEARCH
-// --------------------------------------------------
+// =====================================================
 
 export async function geocode(city) {
   const url =
@@ -77,238 +77,300 @@ export async function geocode(city) {
 }
 
 
-// --------------------------------------------------
+// =====================================================
+// WEATHER CACHE
+// =====================================================
+
+// Cache weather responses for 10 minutes.
+// This reduces repeated Open-Meteo and OpenWeather requests.
+const weatherCache = new Map();
+
+// Prevent multiple simultaneous requests
+// for the same location.
+const weatherInflight = new Map();
+
+const WEATHER_CACHE_TTL = 10 * 60 * 1000;
+
+
+// =====================================================
 // WEATHER BY COORDINATES
-// --------------------------------------------------
+// =====================================================
 
 export async function weatherByCoordinates(
   latitude,
   longitude
 ) {
+  // Round coordinates so tiny GPS differences
+  // can reuse the same cached weather data.
+  const cacheKey =
+    `${Number(latitude).toFixed(2)},${Number(longitude).toFixed(2)}`;
 
-  // -----------------------------------------------
-  // OPENWEATHER - CURRENT WEATHER
-  // -----------------------------------------------
+  // --------------------------------------------------
+  // CHECK CACHE
+  // --------------------------------------------------
 
-  const currentUrl =
-    `https://api.openweathermap.org/data/2.5/weather` +
-    `?lat=${latitude}` +
-    `&lon=${longitude}` +
-    `&appid=${process.env.OPENWEATHER_API_KEY}` +
-    `&units=metric`;
+  const cached = weatherCache.get(cacheKey);
 
-
-  // -----------------------------------------------
-  // OPEN-METEO - DAILY + HOURLY WEATHER
-  // ONE REQUEST ONLY
-  // -----------------------------------------------
-
-  const openMeteoUrl =
-    `https://api.open-meteo.com/v1/forecast` +
-    `?latitude=${latitude}` +
-    `&longitude=${longitude}` +
-    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max` +
-    `&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m,visibility` +
-    `&forecast_days=7` +
-    `&timezone=auto`;
-
-
-  // -----------------------------------------------
-  // CALL APIs
-  // -----------------------------------------------
-
-  const [
-    currentResponse,
-    openMeteoResponse
-  ] = await Promise.all([
-    fetch(currentUrl),
-    fetch(openMeteoUrl)
-  ]);
-
-
-  // -----------------------------------------------
-  // ERROR HANDLING
-  // -----------------------------------------------
-
-  if (!currentResponse.ok) {
-    const errorText =
-      await currentResponse.text();
-
-    throw new Error(
-      `OpenWeather error: ${errorText}`
-    );
+  if (
+    cached &&
+    Date.now() - cached.timestamp < WEATHER_CACHE_TTL
+  ) {
+    return cached.data;
   }
 
+  // --------------------------------------------------
+  // CHECK EXISTING REQUEST
+  // --------------------------------------------------
 
-  if (!openMeteoResponse.ok) {
-    const errorText =
-      await openMeteoResponse.text();
-
-    throw new Error(
-      `Open-Meteo forecast error: ${errorText}`
-    );
+  if (weatherInflight.has(cacheKey)) {
+    return weatherInflight.get(cacheKey);
   }
 
+  // Create one request for this location.
+  const requestPromise = (async () => {
 
-  // -----------------------------------------------
-  // CONVERT RESPONSES TO JSON
-  // -----------------------------------------------
+    // -----------------------------------------------
+    // OPENWEATHER - CURRENT WEATHER
+    // -----------------------------------------------
 
-  const currentData =
-    await currentResponse.json();
-
-  const openMeteoData =
-    await openMeteoResponse.json();
-
-
-  // -----------------------------------------------
-  // CURRENT WEATHER
-  // -----------------------------------------------
-
-  const current = {
-    temperature_2m:
-      currentData.main.temp,
-
-    relative_humidity_2m:
-      currentData.main.humidity,
-
-    apparent_temperature:
-      currentData.main.feels_like,
-
-    visibility:
-      currentData.visibility || 0,
-
-    precipitation:
-      currentData.rain?.["1h"] ||
-      currentData.snow?.["1h"] ||
-      0,
-
-    weather_code:
-      currentData.weather?.[0]?.id,
-
-    condition:
-      codeToCondition(
-        currentData.weather?.[0]
-      ),
-
-    cloud_cover:
-      currentData.clouds?.all || 0,
-
-    surface_pressure:
-      currentData.main.pressure,
-
-    wind_speed_10m:
-      currentData.wind.speed,
-
-    wind_direction_10m:
-      currentData.wind.deg,
-
-    is_day:
-      currentData.sys?.sunrise &&
-        currentData.sys?.sunset
-        ? Math.floor(Date.now() / 1000) >=
-        currentData.sys.sunrise &&
-        Math.floor(Date.now() / 1000) <
-        currentData.sys.sunset
-        : true
-  };
+    const currentUrl =
+      `https://api.openweathermap.org/data/2.5/weather` +
+      `?lat=${latitude}` +
+      `&lon=${longitude}` +
+      `&appid=${process.env.OPENWEATHER_API_KEY}` +
+      `&units=metric`;
 
 
-  // -----------------------------------------------
-  // OPEN-METEO HOURLY DATA
-  // -----------------------------------------------
+    // -----------------------------------------------
+    // OPEN-METEO - DAILY + HOURLY WEATHER
+    // ONE REQUEST ONLY
+    // -----------------------------------------------
 
-  const hourly = {
-    time:
-      openMeteoData.hourly?.time || [],
-
-    temperature_2m:
-      openMeteoData.hourly?.temperature_2m || [],
-
-    precipitation_probability:
-      openMeteoData.hourly
-        ?.precipitation_probability || [],
-
-    weather_code:
-      openMeteoData.hourly?.weather_code || [],
-
-    wind_speed_10m:
-      openMeteoData.hourly?.wind_speed_10m || [],
-
-    relative_humidity_2m:
-      openMeteoData.hourly
-        ?.relative_humidity_2m || [],
-
-    // ---------------------------------------------
-    // VISIBILITY
-    // ---------------------------------------------
-
-    visibility:
-      openMeteoData.hourly?.visibility || []
-  };
+    const openMeteoUrl =
+      `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${latitude}` +
+      `&longitude=${longitude}` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max` +
+      `&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m,visibility` +
+      `&forecast_days=7` +
+      `&timezone=auto`;
 
 
-  // -----------------------------------------------
-  // 7 DAY DATA
-  // -----------------------------------------------
+    // -----------------------------------------------
+    // CALL APIS
+    // -----------------------------------------------
 
-  const daily = {
-    time:
-      openMeteoData.daily?.time || [],
-
-    temperature_2m_max:
-      openMeteoData.daily
-        ?.temperature_2m_max || [],
-
-    temperature_2m_min:
-      openMeteoData.daily
-        ?.temperature_2m_min || [],
-
-    precipitation_probability_max:
-      openMeteoData.daily
-        ?.precipitation_probability_max || [],
-
-    weather_code:
-      openMeteoData.daily
-        ?.weather_code || [],
-
-    sunrise:
-      openMeteoData.daily?.sunrise || [],
-
-    sunset:
-      openMeteoData.daily?.sunset || [],
-
-    uv_index_max:
-      openMeteoData.daily?.uv_index_max || []
-  };
+    const [
+      currentResponse,
+      openMeteoResponse
+    ] = await Promise.all([
+      fetch(currentUrl),
+      fetch(openMeteoUrl)
+    ]);
 
 
-  // -----------------------------------------------
-  // FINAL RESPONSE
-  // -----------------------------------------------
+    // -----------------------------------------------
+    // ERROR HANDLING
+    // -----------------------------------------------
 
-  return {
-    current,
+    if (!currentResponse.ok) {
+      const errorText =
+        await currentResponse.text();
 
-    hourly,
+      throw new Error(
+        `OpenWeather error: ${errorText}`
+      );
+    }
 
-    daily,
+    if (!openMeteoResponse.ok) {
+      const errorText =
+        await openMeteoResponse.text();
 
-    timezone:
-      openMeteoData.timezone || 0
-  };
+      throw new Error(
+        `Open-Meteo forecast error: ${errorText}`
+      );
+    }
+
+
+    // -----------------------------------------------
+    // CONVERT RESPONSES TO JSON
+    // -----------------------------------------------
+
+    const currentData =
+      await currentResponse.json();
+
+    const openMeteoData =
+      await openMeteoResponse.json();
+
+
+    // -----------------------------------------------
+    // CURRENT WEATHER
+    // -----------------------------------------------
+
+    const current = {
+      temperature_2m:
+        currentData.main.temp,
+
+      relative_humidity_2m:
+        currentData.main.humidity,
+
+      apparent_temperature:
+        currentData.main.feels_like,
+
+      visibility:
+        currentData.visibility || 0,
+
+      precipitation:
+        currentData.rain?.["1h"] ||
+        currentData.snow?.["1h"] ||
+        0,
+
+      weather_code:
+        currentData.weather?.[0]?.id,
+
+      condition:
+        codeToCondition(
+          currentData.weather?.[0]
+        ),
+
+      cloud_cover:
+        currentData.clouds?.all || 0,
+
+      surface_pressure:
+        currentData.main.pressure,
+
+      wind_speed_10m:
+        currentData.wind.speed,
+
+      wind_direction_10m:
+        currentData.wind.deg,
+
+      is_day:
+        currentData.sys?.sunrise &&
+          currentData.sys?.sunset
+          ? Math.floor(Date.now() / 1000) >=
+          currentData.sys.sunrise &&
+          Math.floor(Date.now() / 1000) <
+          currentData.sys.sunset
+          : true
+    };
+
+
+    // -----------------------------------------------
+    // OPEN-METEO HOURLY DATA
+    // -----------------------------------------------
+
+    const hourly = {
+      time:
+        openMeteoData.hourly?.time || [],
+
+      temperature_2m:
+        openMeteoData.hourly?.temperature_2m || [],
+
+      precipitation_probability:
+        openMeteoData.hourly
+          ?.precipitation_probability || [],
+
+      weather_code:
+        openMeteoData.hourly?.weather_code || [],
+
+      wind_speed_10m:
+        openMeteoData.hourly?.wind_speed_10m || [],
+
+      relative_humidity_2m:
+        openMeteoData.hourly
+          ?.relative_humidity_2m || [],
+
+      visibility:
+        openMeteoData.hourly?.visibility || []
+    };
+
+
+    // -----------------------------------------------
+    // 7 DAY DATA
+    // -----------------------------------------------
+
+    const daily = {
+      time:
+        openMeteoData.daily?.time || [],
+
+      temperature_2m_max:
+        openMeteoData.daily
+          ?.temperature_2m_max || [],
+
+      temperature_2m_min:
+        openMeteoData.daily
+          ?.temperature_2m_min || [],
+
+      precipitation_probability_max:
+        openMeteoData.daily
+          ?.precipitation_probability_max || [],
+
+      weather_code:
+        openMeteoData.daily?.weather_code || [],
+
+      sunrise:
+        openMeteoData.daily?.sunrise || [],
+
+      sunset:
+        openMeteoData.daily?.sunset || [],
+
+      uv_index_max:
+        openMeteoData.daily?.uv_index_max || []
+    };
+
+
+    // -----------------------------------------------
+    // FINAL RESPONSE
+    // -----------------------------------------------
+
+    const result = {
+      current,
+      hourly,
+      daily,
+      timezone:
+        openMeteoData.timezone || 0
+    };
+
+
+    // -----------------------------------------------
+    // SAVE SUCCESSFUL RESPONSE TO CACHE
+    // -----------------------------------------------
+
+    weatherCache.set(cacheKey, {
+      timestamp: Date.now(),
+      data: result
+    });
+
+    return result;
+
+  })();
+
+
+  // Store the running request.
+  weatherInflight.set(
+    cacheKey,
+    requestPromise
+  );
+
+
+  // Return result and remove the running request.
+  try {
+    return await requestPromise;
+  } finally {
+    weatherInflight.delete(cacheKey);
+  }
 }
 
 
-// --------------------------------------------------
+// =====================================================
 // NEARBY CITIES
-// --------------------------------------------------
+// =====================================================
 
 export async function nearbyCities(
   latitude,
   longitude
 ) {
-
   const url =
     `https://api.openweathermap.org/geo/1.0/reverse` +
     `?lat=${latitude}` +
@@ -326,16 +388,15 @@ export async function nearbyCities(
 }
 
 
-// --------------------------------------------------
+// =====================================================
 // WEATHER ALERTS
-// --------------------------------------------------
+// =====================================================
 
 export async function generateWeatherAlerts(
   userId,
   city,
   weather
 ) {
-
   const alerts = [];
 
 
@@ -352,7 +413,7 @@ export async function generateWeatherAlerts(
       temperature: true,
       uv: true,
       wind: true,
-      thunderstorm: true,
+      thunderstorm: true
     };
 
 
@@ -400,17 +461,14 @@ export async function generateWeatherAlerts(
     preferences.thunderstorm &&
     condition.includes("thunder")
   ) {
-
     alerts.push({
-
       type: "Thunderstorm Alert",
 
       message:
         `Thunderstorm conditions are expected in ${city}. ` +
         `Consider staying indoors and avoid unnecessary travel.`,
 
-      severity: "high",
-
+      severity: "high"
     });
   }
 
@@ -423,9 +481,7 @@ export async function generateWeatherAlerts(
     preferences.rain &&
     rainProbability >= 60
   ) {
-
     alerts.push({
-
       type: "Rain Alert",
 
       message:
@@ -435,8 +491,7 @@ export async function generateWeatherAlerts(
       severity:
         rainProbability >= 80
           ? "high"
-          : "medium",
-
+          : "medium"
     });
   }
 
@@ -449,9 +504,7 @@ export async function generateWeatherAlerts(
     preferences.temperature &&
     temperature >= 35
   ) {
-
     alerts.push({
-
       type: "High Temperature Alert",
 
       message:
@@ -462,8 +515,7 @@ export async function generateWeatherAlerts(
       severity:
         temperature >= 40
           ? "high"
-          : "medium",
-
+          : "medium"
     });
   }
 
@@ -476,9 +528,7 @@ export async function generateWeatherAlerts(
     preferences.uv &&
     uvIndex >= 8
   ) {
-
     alerts.push({
-
       type: "High UV Alert",
 
       message:
@@ -489,8 +539,7 @@ export async function generateWeatherAlerts(
       severity:
         uvIndex >= 11
           ? "high"
-          : "medium",
-
+          : "medium"
     });
   }
 
@@ -503,9 +552,7 @@ export async function generateWeatherAlerts(
     preferences.wind &&
     windSpeedKmh >= 40
   ) {
-
     alerts.push({
-
       type: "Strong Wind Alert",
 
       message:
@@ -516,8 +563,7 @@ export async function generateWeatherAlerts(
       severity:
         windSpeedKmh >= 60
           ? "high"
-          : "medium",
-
+          : "medium"
     });
   }
 
@@ -527,32 +573,24 @@ export async function generateWeatherAlerts(
   // =========================================
 
   for (const alertData of alerts) {
-
     const existingAlert =
       await WeatherAlert.findOne({
         userId,
         city,
         type: alertData.type,
-        isRead: false,
+        isRead: false
       });
 
 
     // Prevent duplicate unread alerts
 
     if (!existingAlert) {
-
       await WeatherAlert.create({
-
         userId,
-
         city,
-
         type: alertData.type,
-
         message: alertData.message,
-
-        severity: alertData.severity,
-
+        severity: alertData.severity
       });
     }
   }
