@@ -1,7 +1,7 @@
+import cors from "cors";
 import alertRoutes from "./routes/alertRoutes.js";
 import "dotenv/config";
 import express from "express";
-import cors from "cors";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import weatherRoutes from "./routes/weatherRoutes.js";
@@ -11,29 +11,31 @@ import aiRoutes from "./routes/aiRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 
 const app = express();
+
 const allowedOrigins = [
   "http://localhost:5173",
+  "https://capstone-project-mauve-sigma.vercel.app",
   "https://capstone-project-anugrah123.vercel.app",
 ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (
-        !origin ||
-        allowedOrigins.includes(origin) ||
-        /^https:\/\/capstone-project-[a-z0-9-]+-anugrah123\.vercel\.app$/.test(origin)
-      ) {
+      if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        callback(new Error(`Not allowed by CORS: ${origin}`));
       }
     },
   })
 );
+
 app.use(express.json());
 
-app.get("/", (req, res) => res.json({ message: "Weather AI API is running" }));
+app.get("/", (req, res) =>
+  res.json({ message: "Weather AI API is running" })
+);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/weather", weatherRoutes);
 app.use("/api/favorites", favoriteRoutes);
@@ -48,6 +50,9 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
+
 connectDB().then(() => {
-  app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`Backend running on port ${PORT}`);
+  });
 });
