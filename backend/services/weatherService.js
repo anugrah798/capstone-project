@@ -89,8 +89,186 @@ const weatherCache = new Map();
 // for the same location.
 const weatherInflight = new Map();
 
-const WEATHER_CACHE_TTL = 10 * 60 * 1000;
+const WEATHER_CACHE_TTL = 60 * 60 * 1000;
 
+
+
+
+// =====================================================
+// WEATHERAPI FALLBACK
+// =====================================================
+
+async function weatherApiFallback(latitude, longitude) {
+  const url =
+    `https://api.weatherapi.com/v1/forecast.json` +
+    `?key=${process.env.WEATHERAPI_KEY}` +
+    `&q=${latitude},${longitude}` +
+    `&days=3` +
+    `&aqi=no` +
+    `&alerts=yes`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `WeatherAPI fallback error: ${errorText}`
+    );
+  }
+
+  const data = await response.json();
+
+  // -----------------------------------------------
+  // CURRENT WEATHER
+  // -----------------------------------------------
+
+  const current = {
+    temperature_2m:
+      data.current?.temp_c ?? 0,
+
+    relative_humidity_2m:
+      data.current?.humidity ?? 0,
+
+    apparent_temperature:
+      data.current?.feelslike_c ?? 0,
+
+    visibility:
+      (data.current?.vis_km ?? 0) * 1000,
+
+    precipitation:
+      data.current?.precip_mm ?? 0,
+
+    weather_code:
+      data.current?.condition?.code ?? 0,
+
+    condition:
+      data.current?.condition?.text || "Unknown",
+
+    cloud_cover:
+      data.current?.cloud ?? 0,
+
+    surface_pressure:
+      data.current?.pressure_mb ?? 0,
+
+    // WeatherAPI gives wind in km/h.
+    // Convert to m/s to match your existing structure.
+    wind_speed_10m:
+      (data.current?.wind_kph ?? 0) / 3.6,
+
+    wind_direction_10m:
+      data.current?.wind_degree ?? 0,
+
+    is_day:
+      data.current?.is_day === 1,
+  };
+
+
+  // -----------------------------------------------
+  // HOURLY WEATHER
+  // -----------------------------------------------
+
+  const hourly = {
+    time: [],
+    temperature_2m: [],
+    precipitation_probability: [],
+    weather_code: [],
+    wind_speed_10m: [],
+    relative_humidity_2m: [],
+    visibility: [],
+  };
+
+  for (const day of data.forecast?.forecastday || []) {
+    for (const hour of day.hour || []) {
+
+      hourly.time.push(
+        hour.time.replace(" ", "T")
+      );
+
+      hourly.temperature_2m.push(
+        hour.temp_c ?? 0
+      );
+
+      hourly.precipitation_probability.push(
+        hour.chance_of_rain ?? 0
+      );
+
+      hourly.weather_code.push(
+        hour.condition?.code ?? 0
+      );
+
+      hourly.wind_speed_10m.push(
+        (hour.wind_kph ?? 0) / 3.6
+      );
+
+      hourly.relative_humidity_2m.push(
+        hour.humidity ?? 0
+      );
+
+      hourly.visibility.push(
+        (hour.vis_km ?? 0) * 1000
+      );
+    }
+  }
+
+
+  // -----------------------------------------------
+  // DAILY WEATHER
+  // -----------------------------------------------
+
+  const daily = {
+    time: [],
+    temperature_2m_max: [],
+    temperature_2m_min: [],
+    precipitation_probability_max: [],
+    weather_code: [],
+    sunrise: [],
+    sunset: [],
+    uv_index_max: [],
+  };
+
+  for (const day of data.forecast?.forecastday || []) {
+
+    daily.time.push(day.date);
+
+    daily.temperature_2m_max.push(
+      day.day?.maxtemp_c ?? 0
+    );
+
+    daily.temperature_2m_min.push(
+      day.day?.mintemp_c ?? 0
+    );
+
+    daily.precipitation_probability_max.push(
+      day.day?.daily_chance_of_rain ?? 0
+    );
+
+    daily.weather_code.push(
+      day.day?.condition?.code ?? 0
+    );
+
+    daily.sunrise.push(
+      day.astro?.sunrise || ""
+    );
+
+    daily.sunset.push(
+      day.astro?.sunset || ""
+    );
+
+    daily.uv_index_max.push(
+      day.day?.uv ?? 0
+    );
+  }
+
+
+  return {
+    current,
+    hourly,
+    daily,
+    timezone:
+      data.location?.tz_id || "auto",
+  };
+}
 
 // =====================================================
 // WEATHER BY COORDINATES
@@ -186,9 +364,23 @@ export async function weatherByCoordinates(
       const errorText =
         await openMeteoResponse.text();
 
-      throw new Error(
-        `Open-Meteo forecast error: ${errorText}`
+      console.log(
+        "Open-Meteo failed. Using WeatherAPI fallback.",
+        errorText
       );
+
+      const fallbackWeather =
+        await weatherApiFallback(
+          latitude,
+          longitude
+        );
+
+      weatherCache.set(cacheKey, {
+        timestamp: Date.now(),
+        data: fallbackWeather,
+      });
+
+      return fallbackWeather;
     }
 
 
