@@ -11,25 +11,27 @@ import aiRoutes from "./routes/aiRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 
 const app = express();
-
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://capstone-project-mauve-sigma.vercel.app",
   "https://capstone-project-anugrah123.vercel.app",
 ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        /^https:\/\/capstone-project-[a-z0-9-]+-anugrah123\.vercel\.app$/.test(origin)
+      ) {
         callback(null, true);
       } else {
-        callback(new Error(`Not allowed by CORS: ${origin}`));
+        console.log("Blocked by CORS:", origin);
+        callback(new Error("Not allowed by CORS"));
       }
     },
   })
 );
-
 app.use(express.json());
 
 app.get("/", (req, res) =>
