@@ -230,7 +230,6 @@ export default function Profile() {
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            capture="user"
             hidden
             onChange={handlePhotoChange}
           />
