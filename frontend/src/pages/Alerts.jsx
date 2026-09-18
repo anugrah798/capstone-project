@@ -9,7 +9,9 @@ export default function Alerts() {
     async function loadAlerts() {
         try {
             setLoading(true);
+
             const { data } = await api.get("/alerts");
+
             setAlerts(data.alerts || []);
             setError("");
         } catch (err) {
@@ -26,27 +28,43 @@ export default function Alerts() {
         loadAlerts();
     }, []);
 
+    // Mark alert as read
     async function markRead(id) {
         try {
             await api.put(`/alerts/${id}/read`);
-            loadAlerts();
+
+            // Update only the selected alert
+            setAlerts((prevAlerts) =>
+                prevAlerts.map((alert) =>
+                    alert._id === id
+                        ? { ...alert, isRead: true }
+                        : alert
+                )
+            );
         } catch (err) {
             console.log("Unable to mark alert as read");
         }
     }
 
+    // Delete one alert
     async function removeAlert(id) {
         try {
             await api.delete(`/alerts/${id}`);
-            loadAlerts();
+
+            // Remove only the selected alert
+            setAlerts((prevAlerts) =>
+                prevAlerts.filter((alert) => alert._id !== id)
+            );
         } catch (err) {
             console.log("Unable to delete alert");
         }
     }
 
+    // Delete all alerts
     async function clearAll() {
         try {
             await api.delete("/alerts");
+
             setAlerts([]);
         } catch (err) {
             console.log("Unable to clear alerts");
@@ -120,8 +138,7 @@ export default function Alerts() {
                             key={alert._id}
                             className={`weather-alert ${getSeverityClass(
                                 alert.severity
-                            )} ${alert.isRead ? "alert-read" : ""
-                                }`}
+                            )} ${alert.isRead ? "alert-read" : ""}`}
                         >
 
                             <div className="alert-icon">
