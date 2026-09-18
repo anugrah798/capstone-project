@@ -81,7 +81,7 @@ export async function geocode(city) {
 // WEATHER CACHE
 // =====================================================
 
-// Cache weather responses for 10 minutes.
+// Cache weather responses for 60 minutes.
 // This reduces repeated Open-Meteo and OpenWeather requests.
 const weatherCache = new Map();
 
