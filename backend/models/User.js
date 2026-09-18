@@ -32,6 +32,15 @@ const userSchema = new mongoose.Schema(
       default: ""
     },
 
+    // ================================
+    // PROFILE PHOTO
+    // ================================
+
+    profilePhoto: {
+      type: String,
+      default: ""
+    },
+
     unit: {
       type: String,
       enum: ["C", "F"],

@@ -2,9 +2,7 @@ import { InferenceClient } from "@huggingface/inference";
 const hf = new InferenceClient(process.env.HF_TOKEN);
 
 
-// --------------------------------------------------
-// RULE-BASED AI SUGGESTION
-// --------------------------------------------------
+//----- RULE-BASED AI SUGGESTION -----//
 
 function makeSuggestion(w) {
   const temp =
@@ -67,9 +65,7 @@ function makeSuggestion(w) {
 }
 
 
-// --------------------------------------------------
-// WEATHER SUGGESTION
-// --------------------------------------------------
+// ----- WEATHER SUGGESTION -----//
 
 export async function suggestion(req, res) {
   try {
@@ -92,10 +88,7 @@ export async function suggestion(req, res) {
   }
 }
 
-
-// --------------------------------------------------
-// HUGGING FACE AI CHAT
-// --------------------------------------------------
+// -----  HUGGING FACE AI CHAT -----//
 
 export async function chat(req, res) {
   try {

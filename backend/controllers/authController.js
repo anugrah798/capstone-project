@@ -67,7 +67,8 @@ export async function register(req, res) {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        profilePhoto: user.profilePhoto || ""
       }
     });
 
@@ -109,7 +110,8 @@ export async function login(req, res) {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        profilePhoto: user.profilePhoto || ""
       }
     });
 
@@ -127,14 +129,17 @@ export async function me(req, res) {
   });
 }
 
-
 export async function updateProfile(req, res) {
   try {
-    const { name, preferredCity } = req.body;
+    const {
+      name,
+      preferredCity,
+      profilePhoto
+    } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({
-        message: "Name is required",
+        message: "Name is required"
       });
     }
 
@@ -142,12 +147,16 @@ export async function updateProfile(req, res) {
 
     if (!user) {
       return res.status(404).json({
-        message: "User not found",
+        message: "User not found"
       });
     }
 
     user.name = name.trim();
     user.preferredCity = preferredCity?.trim() || "";
+
+    if (typeof profilePhoto === "string") {
+      user.profilePhoto = profilePhoto;
+    }
 
     await user.save();
 
@@ -159,13 +168,14 @@ export async function updateProfile(req, res) {
         email: user.email,
         preferredCity: user.preferredCity,
         role: user.role,
-      },
+        profilePhoto: user.profilePhoto || ""
+      }
     });
   } catch (error) {
     console.error("Update profile error:", error);
 
     res.status(500).json({
-      message: "Unable to update profile",
+      message: "Unable to update profile"
     });
   }
 }

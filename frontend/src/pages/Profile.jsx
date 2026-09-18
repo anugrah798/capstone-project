@@ -3,7 +3,7 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
 
   const [name, setName] = useState(user?.name || "");
   const [preferredCity, setPreferredCity] = useState(
@@ -15,7 +15,7 @@ export default function Profile() {
 
   const [message, setMessage] = useState("");
   const [photo, setPhoto] = useState(
-    localStorage.getItem("skySenseProfilePhoto") || ""
+    user?.profilePhoto || ""
   );
 
   const [showPasswordBox, setShowPasswordBox] = useState(false);
@@ -63,9 +63,10 @@ export default function Profile() {
     e.preventDefault();
 
     try {
-      await api.put("/auth/profile", {
+      const response = await api.put("/auth/profile", {
         name,
         preferredCity,
+        profilePhoto: photo
       });
 
       setMessage("Profile updated successfully.");
@@ -81,7 +82,7 @@ export default function Profile() {
     }
   }
 
-  function handlePhotoChange(e) {
+  async function handlePhotoChange(e) {
     const file = e.target.files?.[0];
 
     if (!file) return;
@@ -98,40 +99,63 @@ export default function Profile() {
 
     const reader = new FileReader();
 
-    reader.onload = () => {
-      const imageData = reader.result;
+    reader.onload = async () => {
+      try {
+        const imageData = reader.result;
 
-      setPhoto(imageData);
+        const response = await api.put("/auth/profile", {
+          name,
+          preferredCity,
+          profilePhoto: imageData
+        });
 
-      localStorage.setItem(
-        "skySenseProfilePhoto",
-        imageData
-      );
+        setPhoto(response.data.user.profilePhoto);
+setUser(response.data.user)
 
-      setMessage("Profile photo updated.");
+        setMessage("Profile photo updated.");
 
-      setTimeout(() => {
-        setMessage("");
-      }, 3000);
+        setTimeout(() => {
+          setMessage("");
+        }, 3000);
+
+      } catch (error) {
+        console.error("Profile photo update error:", error);
+
+        setMessage(
+          error.response?.data?.message ||
+          "Unable to update profile photo."
+        );
+      }
     };
 
     reader.readAsDataURL(file);
   }
 
-  function removePhoto() {
-    setPhoto("");
+  async function removePhoto() {
+    try {
+      const response = await api.put("/auth/profile", {
+        name,
+        preferredCity,
+        profilePhoto: ""
+      });
 
-    localStorage.removeItem(
-      "skySenseProfilePhoto"
-    );
+      setPhoto(response.data.user.profilePhoto || "");
 
-    setMessage("Profile photo removed.");
+      setMessage("Profile photo removed.");
 
-    setTimeout(() => {
-      setMessage("");
-    }, 3000);
+      setTimeout(() => {
+        setMessage("");
+      }, 3000);
+
+    } catch (error) {
+      console.error("Remove profile photo error:", error);
+
+      setMessage(
+        error.response?.data?.message ||
+        "Unable to remove profile photo."
+      );
+    }
   }
-
   async function handleChangePassword(e) {
     e.preventDefault();
 

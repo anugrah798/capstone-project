@@ -1,5 +1,6 @@
 import api from "../services/api";
 import TodayHourly from "../components/TodayHourly";
+import { useAuth } from "../context/AuthContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import html2canvas from "html2canvas";
@@ -53,6 +54,7 @@ function getDayName(date, index) {
 }
 
 export default function Home() {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -874,17 +876,11 @@ export default function Home() {
           <button
             type="button"
             className="header-profile"
-            onClick={() =>
-              navigate("/profile")
-            }
+            onClick={() => navigate("/profile")}
           >
-            {localStorage.getItem(
-              "skySenseProfilePhoto"
-            ) ? (
+            {user?.profilePhoto ? (
               <img
-                src={localStorage.getItem(
-                  "skySenseProfilePhoto"
-                )}
+                src={user.profilePhoto}
                 alt="Profile"
               />
             ) : (
